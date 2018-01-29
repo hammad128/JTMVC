@@ -1,0 +1,1359 @@
+CatalogController.cs
+----------------------
+using System;
+using System.Linq;
+using System.Web.Mvc;
+using JTJapan.Core.AdminArea;
+using JTJapan.Core.AdminArea.ViewModel;
+using System.Data;
+using JTJapan.Core;
+using Automobile.Admin.Models; 
+using System.Threading.Tasks;
+using JTJapan.Core.Helper; 
+using System.Data;
+using System.Data.SqlClient;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+
+
+namespace Automobile.Admin.Controllers
+{
+    public class CatalogController : BaseController
+    {
+        private int? GetDefaultValue(int? id)
+        {
+            return id == -1 ? null : id;
+        }
+        public ActionResult RoleSetup()
+        {
+            AdminRole admin = new AdminRole();
+            return View(admin);
+        }
+
+        [HttpPost]
+        [ValidateInput(false)]
+        [ValidateAntiForgeryToken]
+        public ActionResult RoleSetup(AdminRole admin)
+        {
+            try
+            {
+                if (ModelState.IsValid)
+                {
+                    SqlParameter[] parameters =
+               {
+                  new SqlParameter("@RoleCode", SqlDbType.Int) { Value = admin.roleCode },
+                  new SqlParameter("@RoleName", SqlDbType.VarChar) { Value = admin.RoleName.Trim() },
+                  new SqlParameter("@CreatedBy", SqlDbType.Int) { Value = General.CurrentUserID },
+                  new SqlParameter("@UserIP", SqlDbType.VarChar) { Value = General.CurrentIP }
+               };
+                    DataSet ds = DataAccess.getDataSet("Admin_InsertUpdate_Role", parameters, General.GetConstring());
+                    if (ds.Tables[0].Rows.Count > 0)
+                    {
+                        if (ds.Tables[0].Rows[0]["Status"].ToString() == "inserted")
+                        {
+                            TempData["Success"] = "Role added successfully!";
+                        }
+                        else if (ds.Tables[0].Rows[0]["Status"].ToString() == "updated")
+                        {
+                            TempData["Success"] = "Role updated successfully!";
+                        }
+                        else
+                        {
+                            TempData["alreadyExist"] = "Role already exist!";
+                        }
+                    }
+                    else
+                    {
+                        admin.IsError = true;
+                        admin.ErrorMessage = Message.ErrorMesssage;
+                    }
+                }
+                TempData["Validation"] = "Validation message";
+                return View(admin);
+
+            }
+            catch (Exception ex)
+            {                
+                return View(admin);
+            }
+        }
+
+        [HttpGet]
+        public async Task<string> GetAllScreens(int roleCode)
+        { 
+            try
+            {
+              
+            DataSet ds = null;          
+                SqlParameter[] parameters = {
+                            new SqlParameter("@roleCode", SqlDbType.VarChar) { Value = roleCode  },
+                       };
+                ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_Select_Screens", parameters);
+         
+            return JsonConvert.SerializeObject(ds);
+            }
+             catch (Exception ex)
+             {
+                 return JsonConvert.SerializeObject("");
+             }
+        }
+
+        [HttpGet]
+        public async Task<string> GetRolesAsync()
+        {
+            try
+            {
+                DataSet ds = null;
+                ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_Select_Roles", null);
+               
+                return JsonConvert.SerializeObject(ds);
+            }
+            catch (Exception ex)
+            {                
+                return JsonConvert.SerializeObject("");
+            }
+        }
+      
+        [HttpPost]
+        public ActionResult AddScreen(int roleCode, List<int> Screen)
+        {
+            AdminRole admin = new AdminRole();
+            try
+            {
+                if (ModelState.IsValid)
+                {
+                    SqlParameter[] parameters = {
+                            new SqlParameter("@RoleCode", SqlDbType.Int) { Value = roleCode  },
+                            new SqlParameter("@NavigationCode", SqlDbType.VarChar) { Value = Screen.Count() > 0 ? string.Join(",", Screen) : null},
+                            new SqlParameter("@CreatedBy", SqlDbType.Int) { Value = General.CurrentUserID },
+                            new SqlParameter("@UserIP", SqlDbType.VarChar) { Value = General.CurrentIP }
+                       };
+                    if (DataAccess.executeNonQuery("Admin_RoleNavigation_Mapping", parameters, General.GetConstring(), true)) 
+                    {
+                        TempData["Success"] = "Screen added successfully!";
+                        return RedirectToAction("RoleSetup");
+                    }
+                    else
+                    {
+                        admin.IsError = true;
+                        admin.ErrorMessage = Message.ErrorMesssage;
+                    }
+                }
+                return View(admin);
+            }
+            catch (Exception ex)
+            {   
+                return View(admin);
+            }
+        }
+
+        [HttpPost]
+        public int DeleteScreen(int NavigationCode, int RoleCode)
+        {
+            try
+            {
+                SqlParameter[] parameters = {
+                            new SqlParameter("@RoleCode", SqlDbType.Int) { Value = RoleCode  },
+                            new SqlParameter("@NavigationCode", SqlDbType.Int) { Value = NavigationCode  },
+                            new SqlParameter("@UpdatedBy", SqlDbType.Int) { Value = General.CurrentUserID  },
+                            new SqlParameter("@UserIP", SqlDbType.VarChar) { Value =  General.CurrentIP }
+                       };
+
+                if (DataAccess.executeNonQuery("Admin_Delete_Screen", parameters, General.GetConstring(), true))                            
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            catch (Exception ex)
+            {                
+                return 0;
+            }
+        }
+
+        [HttpPost]
+        public ActionResult DeleteRole(int RoleCode)
+        {
+            AdminRole admin = new AdminRole();
+            try
+            {
+                SqlParameter[] parameters = {
+                            new SqlParameter("@RoleCode", SqlDbType.Int) { Value = RoleCode },
+                            new SqlParameter("@UpdatedBy", SqlDbType.Int) { Value = General.CurrentUserID },
+                            new SqlParameter("@UserIP", SqlDbType.VarChar) { Value =  General.CurrentIP }
+                       };
+
+                if (DataAccess.executeNonQuery("Admin_Delete_Role", parameters, General.GetConstring(), true))                
+                {
+                    TempData["DeleteRole"] = "Role deleted successfully!";
+                    return RedirectToAction("RoleSetup");
+                }
+                else
+                {
+                    admin.IsError = true;
+                    admin.ErrorMessage = Message.ErrorMesssage;
+                }
+                return View(admin);
+            }
+            catch (Exception ex)
+            {                
+                return View(admin);
+            }
+        }
+
+         public DataTable GetScreens(int? ScreenId)
+         {
+            DataTable dt = new DataTable();
+            SqlParameter[] sqlParam = new SqlParameter[]
+              {
+                    new SqlParameter("@ScreenId",DataAccess.GetDataValue(ScreenId) )
+              };
+            return dt = DataAccess.getDataTable("dbo.Admin_SelectScreen", sqlParam, General.GetConstring());
+        }
+         public  List<SelectListItem> GetParerntScreenList()
+         {
+             List<SelectListItem> Parentlist = new List<SelectListItem>();
+             DataTable dt = new DataTable();
+             List<ScreenList> lst = new List<ScreenList>();
+             try
+             {
+                 SqlParameter[] sqlParam = null;
+
+                 dt = DataAccess.getDataTable("dbo.Admin_Select_ScreenList", sqlParam, General.GetConstring());
+                 if (dt.Rows.Count > 0)
+                 {
+                     lst = EnumerableExtension.ToList<ScreenList>(dt);
+                 }
+                 //json = Serializer.Serialize(lst);
+
+                 Parentlist = lst.Select(i => new SelectListItem()
+                 {
+                     Value = i.Id.ToString(),
+                     Text = i.Name
+                 }).ToList();
+                 Parentlist.Insert(0, new SelectListItem() { Value = "0", Text = "Select Parent" });
+             }
+             catch (Exception ex)
+             {
+
+             }
+
+             return Parentlist;
+         }
+         public  List<SelectListItem> GetLevelList()
+         {
+             List<SelectListItem> Levellist = new List<SelectListItem>();
+             DataTable dt = new DataTable();
+             List<LevelList> lst = new List<LevelList>();
+             try
+             {
+                 SqlParameter[] sqlParam = null;
+
+                 dt = DataAccess.getDataTable("dbo.Select_LevelList", sqlParam, General.GetConstring());
+                 if (dt.Rows.Count > 0)
+                 {
+                     lst = EnumerableExtension.ToList<LevelList>(dt);
+                 }
+                 //json = Serializer.Serialize(lst);
+
+                 Levellist = lst.Select(i => new SelectListItem()
+                 {
+                     Value = i.Id.ToString(),
+                     Text = i.Name
+                 }).ToList();                 
+             }
+             catch (Exception ex)
+             {
+
+             }
+             return Levellist;
+         }
+         public DataTable InsertScreen(int? ScreenId, string Title, string URL, string IconClass, int? ParentCode, int LevelType, int? Sequence)
+         {
+             DataTable dt = new DataTable();
+
+             SqlParameter[] sqlParam = new SqlParameter[] {
+                    new SqlParameter("@ScreenId",DataAccess.GetDataValue(ScreenId)),               
+                    new SqlParameter("@Title",DataAccess.GetDataValue(Title)),
+                    new SqlParameter("@URL",DataAccess.GetDataValue(URL)),
+                    new SqlParameter("@IconClass",DataAccess.GetDataValue(IconClass)),
+                    new SqlParameter("@ParentCode",DataAccess.GetDataValue(ParentCode)),
+                    new SqlParameter("@LevelType",DataAccess.GetDataValue(LevelType)),
+                    new SqlParameter("@Sequence ",DataAccess.GetDataValue(Sequence)),   
+                    new SqlParameter("@UpdatedBy",DataAccess.GetDataValue(General.CurrentUserID)),
+                    new SqlParameter("@UpdationIP",DataAccess.GetDataValue(General.CurrentIP))
+                   };
+
+             return dt = DataAccess.getDataTable("dbo.Admin_Insert_UpdateScreen", sqlParam, General.GetConstring());
+         }
+         public static bool DeleteAdminScreen(int ScreenId)
+         {
+             bool result = false;
+             try
+             {
+                 SqlParameter[] sqlParam = new SqlParameter[] {
+                     new SqlParameter("@ScreenId",DataAccess.GetDataValue(ScreenId)),
+                      new SqlParameter("@UpdatedBy",DataAccess.GetDataValue(General.CurrentUserID)),
+                    new SqlParameter("@UpdationIP",DataAccess.GetDataValue(General.CurrentIP))
+                   };
+                 result = true;
+                 DataAccess.getDataTable("dbo.Admin_Delete_AdminScreen", sqlParam, General.GetConstring());
+             }
+             catch (Exception ex)
+             {
+                 throw;
+             }
+             return result;
+         }
+
+        [HttpGet]
+        public ActionResult Screen(int? ScreenId = null)
+        {
+            ScreenResponseModel objScreenResponseModel = new ScreenResponseModel();
+            DataTable datatable = GetScreens(ScreenId);
+            objScreenResponseModel.ScreenList = EnumerableExtension.ToList<ScreenViewModel>(datatable);
+            return View(objScreenResponseModel);
+        }
+        public ActionResult _Screen(int? Id)
+        {
+            ScreenViewModel model = new ScreenViewModel();
+            ViewBag.Level =  GetLevelList();
+            ViewBag.ParentScreen = GetParerntScreenList();
+
+            if (Id != null)
+            {
+                DataTable dataTable = GetScreens(Id);
+                model.Id = Id;
+                model.Title = dataTable.Rows[0]["Title"].ToString();
+                model.URL = dataTable.Rows[0]["Url"].ToString();
+                model.Sequence = (int)dataTable.Rows[0]["Sequence"];
+                model.ParentName = dataTable.Rows[0]["ParentName"].ToString();
+                model.IconClass = dataTable.Rows[0]["IconClass"].ToString();
+                model.ParentCode = string.IsNullOrEmpty(dataTable.Rows[0]["ParentCode"].ToString()) ? 0 : Convert.ToInt32(dataTable.Rows[0]["ParentCode"]);
+                model.LevelType = (int)dataTable.Rows[0]["LevelType"];
+            }
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        public JsonResult _Screen(ScreenViewModel viewModel)
+        {
+            DataTable dataTable = InsertScreen(viewModel.Id, viewModel.Title.Trim(), string.IsNullOrEmpty(viewModel.URL) ? null : viewModel.URL.Trim(), string.IsNullOrEmpty(viewModel.IconClass) ? null : viewModel.IconClass.Trim(), viewModel.ParentCode, viewModel.LevelType, viewModel.Sequence);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "Screen already exists";
+            }
+            else
+            {
+                viewModel.IsValid = true;
+            }
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpPost]
+        public string DeleteRoleScreen(int Id)
+        {
+            string msg = "";
+            try
+            {
+                DeleteAdminScreen(Id);
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return msg;
+        }
+            
+
+
+        #region PortCountry
+        public ActionResult PortCountry()
+        {
+            CatalogueResponseModel responseModel = new CatalogueResponseModel();
+            DataTable dataTable = CatalogueMethod.GetPortCountry();
+            responseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+            return View(responseModel);
+        }
+
+        [HttpPost]
+        public JsonResult _PortCountry(CatalogueResponseModel Objects)
+        {
+            string msg = "";
+            try
+            {
+                foreach (var obj in Objects.CatalogueList)
+                {
+                    CatalogueMethod.UpdatePortCountry(obj.Id, obj.MeterCubeRate);
+                }
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return Json(msg, JsonRequestBehavior.AllowGet);
+        }
+        
+        #endregion
+
+        #region ShippingVendor
+        public ActionResult ShippingVendor()
+        {
+            CatalogueResponseModel responseModel = new CatalogueResponseModel();
+            DataTable dataTable = CatalogueMethod.GetShippingVendor();
+            responseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+            return View(responseModel);
+        }
+
+        public ActionResult _ShippingVendor(int? id)
+        {
+            CatalogueViewModel model = new CatalogueViewModel();
+
+            if (id != null)
+            {
+                DataTable dataTable = CatalogueMethod.GetShippingVendor(id);
+
+                if (dataTable != null && dataTable.Rows.Count > 0)
+                {
+                    model = dataTable.ToList<CatalogueViewModel>().FirstOrDefault();
+                }
+            }
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        [ValidateInput(false)]
+        [ValidateAntiForgeryToken]
+        public JsonResult _ShippingVendor(CatalogueViewModel viewModel)
+        {
+            DataTable dataTable = CatalogueMethod.InsertShippingVendor(viewModel.Id, viewModel.Title, viewModel.Email, viewModel.CCEmail);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "Vendor already exists";
+            }
+
+            else
+            {
+                viewModel.IsValid = true;
+            }
+
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        public JsonResult DeleteShippingVendor(int id)
+        {
+            BaseModel baseModel = new BaseModel();
+            CatalogueMethod.DeleteShippingVendor(id);
+            baseModel.IsValid = true;
+            return Json(baseModel, JsonRequestBehavior.AllowGet);
+        }
+
+        #endregion
+
+        #region PurchaseVendor
+        public ActionResult PurchaseVendor()
+        {
+            CatalogueResponseModel responseModel = new CatalogueResponseModel();
+            DataTable dataTable = CatalogueMethod.GetPurchaseVendor();
+            responseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+            return View(responseModel);
+        }
+
+        public ActionResult _PurchaseVendor(int? id)
+        {
+            CatalogueViewModel model = new CatalogueViewModel();
+
+            if (id != null)
+            {
+                DataTable dataTable = CatalogueMethod.GetPurchaseVendor(id);
+                model.Title = dataTable.Rows[0]["Title"].ToString();
+                model.Address = dataTable.Rows[0]["Address"].ToString();
+            }
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        [ValidateInput(false)]
+        [ValidateAntiForgeryToken]
+        public JsonResult _PurchaseVendor(CatalogueViewModel viewModel)
+        {
+            DataTable dataTable = CatalogueMethod.InsertPurchaseVendor(viewModel.Title, viewModel.Address, viewModel.Id);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "Vendor already exists";
+            }
+
+            else
+            {
+                viewModel.IsValid = true;
+            }
+
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        public JsonResult DeletePurchaseVendor(int id)
+        {
+            BaseModel baseModel = new BaseModel();
+            CatalogueMethod.DeletePurchaseVendor(id);
+            baseModel.IsValid = true;
+            return Json(baseModel, JsonRequestBehavior.AllowGet);
+        }
+
+        #endregion
+
+        #region Transport
+        public ActionResult Transport(int? TransportVendorId = null)
+        {
+            CatalogueResponseModel objCatalogueResponseModel = new CatalogueResponseModel();
+
+            DataTable dataTable = CatalogueMethod.GetTransportVendor(TransportVendorId);
+            objCatalogueResponseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+
+            return View(objCatalogueResponseModel);
+        }
+
+        [HttpPost]
+        public string DeleteTransportVendor(int Id)
+        {
+            string msg = "";
+            try
+            {
+                CatalogueMethod.DeleteTransportVendor(Id);
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return msg;
+        }
+
+        public ActionResult _AddEditTransport(int? TransportVendorId = null)
+        {
+            CatalogueViewModel model = new CatalogueViewModel();
+
+            if (TransportVendorId != null)
+            {
+                DataTable dataTable = CatalogueMethod.GetTransportVendor(TransportVendorId);
+                model.Id = TransportVendorId;
+                model.Title = dataTable.Rows[0]["Title"].ToString();
+                model.Email = dataTable.Rows[0]["Email"].ToString();
+                model.CCEmail = dataTable.Rows[0]["CCEmail"].ToString();
+            }
+
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        [ValidateInput(false)]
+        [ValidateAntiForgeryToken]
+        public JsonResult _AddEditTransport(CatalogueViewModel viewModel)
+        {
+            DataTable dataTable = CatalogueMethod.InsertTransportVendor(viewModel.Id, viewModel.Title, viewModel.Email, viewModel.CCEmail);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "TransportVendor already exists";
+            }
+
+            else
+            {
+                viewModel.IsValid = true;
+            }
+
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+        #endregion
+
+        #region Yard
+        public ActionResult Yard(int? UnitLocationId = null)
+        {
+            CatalogueResponseModel objCatalogueResponseModel = new CatalogueResponseModel();
+            DataTable datatable = CatalogueMethod.GetUnitLocations(UnitLocationId);
+            objCatalogueResponseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(datatable);
+            return View(objCatalogueResponseModel);
+        }
+
+        public ActionResult _Yard(int? Id)
+        {
+            CatalogueViewModel model = new CatalogueViewModel();
+            ViewBag.Vendor = OGMethods.ShippingVendorList();
+            ViewBag.Port = OGMethods.GetPortList();
+
+            if (Id != null)
+            {
+                DataTable dataTable = CatalogueMethod.GetUnitLocations(Id);
+                model.Id = Id;
+                model.Title = dataTable.Rows[0]["Title"].ToString();
+                model.Email = dataTable.Rows[0]["Email"].ToString();
+                model.CCEmail = dataTable.Rows[0]["CCEmail"].ToString();
+                model.InchargePerson = dataTable.Rows[0]["InchargePerson"].ToString();
+                model.AddressLine1 = dataTable.Rows[0]["AddressLine1"].ToString();
+                model.AddressLine2 = dataTable.Rows[0]["AddressLine2"].ToString();
+                model.Phone = dataTable.Rows[0]["Phone"].ToString();
+                model.Port = dataTable.Rows[0]["Port"].ToString();
+                model.ShippingVendor = dataTable.Rows[0]["ShippingVendor"].ToString();
+                model.PortId = (int)dataTable.Rows[0]["PortId"];
+                model.VendorId = (int)dataTable.Rows[0]["VendorId"];
+            }
+
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        public JsonResult _Yard(CatalogueViewModel viewModel)
+        {
+            DataTable dataTable = CatalogueMethod.InsertUnitLocation(viewModel.Id, viewModel.Title, viewModel.Email, viewModel.CCEmail, viewModel.InchargePerson, viewModel.AddressLine1, viewModel.AddressLine2, viewModel.Phone, viewModel.PortId, viewModel.VendorId);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "Yard already exists";
+            }
+            else
+            {
+                viewModel.IsValid = true;
+            }
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpPost]
+        public string DeleteYard(int Id)
+        {
+            string msg = "";
+            try
+            {
+                CatalogueMethod.DeleteUnitLocation(Id);
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return msg;
+        }
+        #endregion
+
+        #region ExporterCompany
+        public ActionResult ExporterCompany(int? ExporterCompanyId = null)
+        {
+            CatalogueResponseModel objCatalogueResponseModel = new CatalogueResponseModel();
+            DataTable dataTable = CatalogueMethod.GetExporterCompany(ExporterCompanyId);
+            objCatalogueResponseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+            return View(objCatalogueResponseModel);
+        }
+
+        public ActionResult _ExporterCompany(int? Id)
+        {
+            CatalogueViewModel model = new CatalogueViewModel();
+
+            if (Id != null)
+            {
+                DataTable dataTable = CatalogueMethod.GetExporterCompany(Id);
+                model.Id = Id;
+                model.Descriptions = dataTable.Rows[0]["Descriptions"].ToString();
+                model.Title = dataTable.Rows[0]["Title"].ToString();
+                model.Phone = dataTable.Rows[0]["Phone"].ToString();
+                model.Fax = dataTable.Rows[0]["Fax"].ToString();
+                model.Address = dataTable.Rows[0]["Address"].ToString();
+            }
+
+            return PartialView(model);
+        }
+
+        [HttpPost]
+        public JsonResult _ExporterCompany(CatalogueViewModel viewModel)
+        {
+            DataTable dataTable = CatalogueMethod.InsertExporterCompany(viewModel.Id, viewModel.Title, viewModel.Address, viewModel.Phone, viewModel.Fax);
+            bool IsExists = Convert.ToBoolean(dataTable.Rows[0]["IsExists"]);
+            if (IsExists)
+            {
+                viewModel.IsValid = false;
+                viewModel.Message = "ExporterCompany already exists";
+            }
+            else
+            {
+                viewModel.IsValid = true;
+            }
+            return Json(viewModel, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpPost]
+        public string DeleteExporterCompany(int Id)
+        {
+            string msg = "";
+            try
+            {
+                CatalogueMethod.DeleteExporterCompany(Id);
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return msg;
+        }
+        #endregion
+
+        #region CountryInspection
+        public ActionResult CountryInspection()
+        {
+            CatalogueResponseModel objCatalogueResponseModel = new CatalogueResponseModel();
+            DataTable dataTable = CatalogueMethod.GetCountryInspection();
+            objCatalogueResponseModel.CatalogueList = EnumerableExtension.ToList<CatalogueViewModel>(dataTable);
+            return View(objCatalogueResponseModel);
+        }
+
+        [HttpPost]
+        public JsonResult _CountryInspection(CatalogueResponseModel Objects)
+        {
+            string msg = "";
+            try
+            {
+                foreach (var obj in Objects.CatalogueList)
+                {
+                    CatalogueMethod.UpdateCountryInspection(obj.Id, obj.InspectionCost);
+                }
+                msg = "success";
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            return Json(msg, JsonRequestBehavior.AllowGet);
+        }
+        #endregion
+
+
+        #region AssignRole
+        public ActionResult AssignRole()
+        {
+            Role R = new Role();
+            List<SelectListItem> lstofDept = GetDeptName();
+            lstofDept.Insert(0, new SelectListItem() { Value = "-1", Text = "Select" });
+            R.DeptList = lstofDept;
+            return View(R);
+        }
+
+        public List<SelectListItem> GetDeptName()
+        {
+            try
+            {
+                List<SelectListItem> lstDeptName = new List<SelectListItem>();
+                SqlParameter[] parameters = { };
+                DataTable dt = DataAccess.getDataTable("Admin_Select_Departments", parameters, General.GetConstring());
+                if (dt != null)
+                {
+                    for (int i = 0; i < dt.Rows.Count; i++)
+                    {
+                        lstDeptName.Add(new SelectListItem() { Value = dt.Rows[i]["DepartmentCode"].ToString(), Text = dt.Rows[i]["DepartmentName"].ToString() });
+                    }
+                }
+                return lstDeptName;
+            }
+            catch (Exception ex)
+            {
+                //LogError(ex);
+                throw;
+            }
+        }
+
+        [HttpGet]
+        public async Task<string> GetRoleDetails(int UserCode)
+        {
+            DataSet ds = null;
+            SqlParameter[] parameters =
+                        {
+                            new SqlParameter("@UserCode", SqlDbType.Int){ Value= UserCode }
+                         };
+            ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_RoleDetails", parameters);
+            return JsonConvert.SerializeObject(ds);
+        }
+        [HttpGet]
+        public async Task<string> GetClientDetails(int UserCode)
+        {
+            try
+            {
+                DataSet ds = null;
+                SqlParameter[] parameters = {
+                            new SqlParameter("@UserCode", SqlDbType.VarChar) { Value = UserCode  },
+                       };
+                ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_ClientDetails", parameters);
+
+                return JsonConvert.SerializeObject(ds);
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject("");
+            }
+        }
+
+        [HttpGet]
+        public async Task<string> GetAssignRoleAsync(string FullName, int DeptCode)
+        {
+            SecureQueryString OBJ = new SecureQueryString();
+            try
+            {
+                Uri url = Request.UrlReferrer;
+                DataSet ds = null;
+                if (true)
+                {
+                    SqlParameter[] parameters =
+                         {
+                            new SqlParameter("@DeptCode", SqlDbType.Int){ Value= DeptCode },
+                            new SqlParameter("@FullName", SqlDbType.VarChar){ Value= FullName }
+
+                         };
+                    ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_AssignRole", parameters);
+
+                    if (ds != null && ds.Tables.Count != 0 && ds.Tables[0].Rows.Count > 0)
+                    {
+                        DataTable dt = ds.Tables[0];
+                        dt.Columns.Add("EncryptedStakeholderCode", typeof(System.String));
+                        for (int i = 0; i < dt.Rows.Count; i++)
+                        {
+                            dt.Rows[i]["EncryptedStakeholderCode"] = OBJ.encrypt(dt.Rows[i]["UserID"].ToString());
+                        }
+                    }
+                }
+                return JsonConvert.SerializeObject(ds);
+            }
+            catch (Exception ex)
+            {
+                //LogError(ex);
+                return JsonConvert.SerializeObject("");
+            }
+        }
+
+
+        [HttpPost]
+        public async Task<int> InsertRole(string RoleCode, int UserCode,int RoleTypeId)
+        {
+            if (RoleCode == string.Empty)
+            {
+                RoleCode = null;
+
+            }
+
+            SqlParameter[] parameters = {
+                            new SqlParameter("@RoleIds", SqlDbType.VarChar) { Value = RoleCode  },
+                            new SqlParameter("@UserId", SqlDbType.Int) { Value = UserCode  },
+                            new SqlParameter("@RoleTypeId", SqlDbType.Int) { Value = RoleTypeId  },
+                            new SqlParameter("@CreatedBy", SqlDbType.Int) { Value = General.CurrentUserID },
+                            new SqlParameter("@UserIP", SqlDbType.VarChar) { Value = General.CurrentIP }
+                       };
+            int rowaffected = await DataAccess.ExecuteNonQueryAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_Insert_AssignRole", parameters);
+            return rowaffected;
+        } 
+        #endregion
+
+
+        #region RoleReport
+        public ActionResult RoleReport()
+        {
+            return View();
+        }
+
+        [ValidateInput(false)]
+        [HttpGet]
+        public async Task<string> GetInfoAsync(int pageNo, int pageSize, string FullName)
+        {
+            SecureQueryString OBJ = new SecureQueryString();
+            try
+            {
+                Uri url = Request.UrlReferrer;
+                DataSet ds = null;
+                if (true)
+                {
+                    SqlParameter[] parameters =
+                        {
+                            new SqlParameter("@PageCount", SqlDbType.Int) { Value = pageNo  },
+                            new SqlParameter("@PageSize", SqlDbType.Int) { Value = pageSize },
+                            new SqlParameter("@FullName", SqlDbType.VarChar){ Value= FullName }
+                         };
+
+                    ds = await DataAccess.ExecuteDatasetAsync(General.GetConstring(), CommandType.StoredProcedure, "Admin_DefineRoles", parameters);
+
+                    if (ds != null && ds.Tables.Count != 0 && ds.Tables[0].Rows.Count > 0)
+                    {
+                        DataTable dt = ds.Tables[0];
+                        dt.Columns.Add("EncryptedStakeholderCode", typeof(System.String));
+                        for (int i = 0; i < dt.Rows.Count; i++)
+                        {
+                            dt.Rows[i]["EncryptedStakeholderCode"] = OBJ.encrypt(dt.Rows[i]["UserID"].ToString());
+                        }
+                    }
+                }
+                return JsonConvert.SerializeObject(ds);
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject("");
+            }
+        }
+        #endregion
+
+
+    }
+}
+
+-----------------------------
+ScreenViewModel.cs 
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+
+namespace Automobile.Admin.Models
+{
+    public class ScreenViewModel : BaseModell
+    {
+        public int? Id { get; set; }
+        public string Title { get; set;}
+        public string URL { get; set;}
+        public string IconClass { get; set;}
+        public string ParentName { get; set; }        
+        public int? ParentCode { get; set;}
+        public int LevelType { get; set;}
+        public int? Sequence { get; set; }
+        public DateTime UpdateDate { get; set; }
+    }
+
+    public class ScreenResponseModel : BaseModell
+    {
+        public ScreenResponseModel()
+        {
+            ScreenList = new List<ScreenViewModel>();
+        }
+        public List<ScreenViewModel> ScreenList { get; set; }
+
+    }
+      public class BaseModell
+    {
+        public bool IsValid { get; set; }
+
+        public string Message { get; set; }
+    }
+
+
+
+
+}
+
+--------------------------------
+Screen.cshtml
+
+@model Automobile.Admin.Models.ScreenResponseModel
+@{
+    ViewBag.Title = "Screen";
+}
+
+<div id="AddScreen">
+</div>
+
+<div class="content-wrapper">
+    <div id="ReportList" class="row" style="margin-left:0px; margin-right:0px;">
+        <section class="content">
+            <div class="box">
+                <div class="box-header">
+                    <h3 class="box-title">Screen</h3>
+                    <div class="box-tools pull-right">
+                        <a onclick="addScreen()" class="btn btn-primary btn-sm">Add Screen</a>
+                    </div>
+                </div>
+                <div class="box-body">
+                    <table class="table table-bordered table-striped" id="dtScreen">
+                        <thead>
+                            <tr>
+                                <th style="width:4%">#</th>
+                                <th style="width:15%"> Name</th>
+                                <th style="width:25%"> Url</th>  
+                                <th style="width:15%"> Parent</th>
+                                <th style="width:5%"> Sequence</th>                                
+                                <th style="width:11%"> Update Date</th>
+                                <th style="width:8%">Action</th>
+
+                            </tr>
+                        </thead>
+                        <tbody class="tbDetail">
+                            @if (Model.ScreenList != null && Model.ScreenList.Count() != 0)
+                            {
+
+                                foreach (var item in Model.ScreenList.Select((value, i) => new { i = i + 1, value }))
+                                {
+                                    <tr>
+                                        <td>
+                                            @item.i
+                                        </td>
+                                        <td>
+                                            @item.value.Title
+                                        </td>
+                                        <td>
+                                            @item.value.URL 
+                                        </td>  
+                                        <td>
+                                            @item.value.ParentName
+                                        </td>   
+                                        <td>
+                                            @item.value.Sequence
+                                        </td>                             
+                                        <td>@string.Format("{0:MMM dd, yyyy}", item.value.UpdateDate) </td>
+                                        <td>
+                                            <button class="btn btn-primary btn-xs" onclick="edit(@item.value.Id)">Edit</button>
+                                            <button class="btn btn-danger btn-xs" data-toggle="modal" data-target="#myModal" value="@(item.value.Id)" onclick="Delete(this)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Modal -->
+                <div id="myModal" class="modal fade" role="dialog">
+                    <div class="modal-dialog">
+                        <!-- Modal content-->
+                        <div class="modal-content">
+
+                            <div class="modal-header" style="background-color: #D73925; color: white">
+                                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                <h4 class="modal-title">Warning</h4>
+                            </div>
+                            <div class="modal-body">
+                                <p>Are you sure to delete Screen ?</p>
+                            </div>
+                            <div class="modal-footer">
+                                <a class="btn btn-danger" data-dismiss="modal" id="btnDelete">
+                                    Yes
+                                </a>
+                                <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+
+</div>
+<script type="text/javascript">
+    var UnitLocationId;
+    $(function () {
+        $('#dtScreen').DataTable();
+    })
+    function Delete(Data) {
+        UnitLocationId = $(Data).attr('value');
+    }
+
+    function edit(id) {
+        var UnitLocationId = id;
+        $.ajax({
+            async: true,
+            type: 'GET',
+            cache: false,
+            data: { Id: UnitLocationId },
+            dataType: 'html',   //response format
+            contentType: 'application/json; charset=utf-8', //request format
+            crossDomain: true,
+            url: '@Url.Action("_Screen")',
+            success: function (data) {
+                $('#AddScreen').html(data);
+                $('#modal-AddScreen').modal('show');
+                $('.modal-body').height($('.col-md-12.AddScreen').height() + 10);
+            }
+        });
+    }
+
+    function addScreen() {
+
+        $.ajax({
+            dataType: "html",
+            async: true,
+            type: 'GET',
+            cache: false,
+            url: '@Url.Action("_Screen")',
+            data: { Id: null },
+            type: 'GET',
+            success: function (data) {
+                $('#AddScreen').html(data);
+                $('#modal-AddScreen').modal('show');
+                $('.modal-body').height($('.col-md-12.AddScreen').height() + 10);
+            },
+        });
+    }
+
+    $(document).ready(function () {
+
+        $("body").delegate("#btnDelete", "click", function () {
+            $.ajax({
+                async: true,
+                type: 'POST',
+                cache: false,
+                data: { Id: UnitLocationId },
+                url: AdminVD + '/Catalog/DeleteRoleScreen',
+                success: function (data) {
+                    if (data == "success") {
+                        Helper.Methods.ShowPopUp('Success', 'Screen deleted successfully!');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 500);
+                    }
+                }
+            });
+        });
+
+
+    });
+</script>
+------------------------------------------
+_Screen.cshtml
+
+
+@model  Automobile.Admin.Models.ScreenViewModel
+
+<style>
+    .input-group-addon {
+        min-width: 135px;
+        text-align: left;
+    }
+
+    textarea {
+        resize: none; 
+    }
+</style>
+
+<div class="modal fade" id="modal-AddScreen">
+    <div class="modal-dialog email-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#3C8DBC">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                @if (Model.Id == null)
+                {
+                    <h4 class="modal-title" style="color:white">Add Screen</h4>
+                }
+                else
+                {
+                    <h4 class="modal-title" style="color:white">Update Screen</h4>
+                }
+            </div>
+
+            <div class="modal-body">
+
+                <div class="form-group input-group">
+                    <span class="input-group-addon">Screen</span>
+                    <input class="form-control" id="Title" value="@Model.Title" type="text" maxlength="100">
+                </div>
+                <div class="form-group input-group">
+                    <span class="input-group-addon">URL</span>
+                    <input class="form-control" id="URL" value="@Model.URL" type="text" maxlength="200">
+                </div>
+                <div class="form-group input-group">
+                    <span class="input-group-addon">Sequence</span>
+                    <input class="form-control" id="Sequence" value="@Model.Sequence" type="text" maxlength="5">
+                </div>
+                <div class="form-group input-group">
+                    <span class="input-group-addon">IconClass</span>
+                    <input class="form-control" id="IconClass" value="@Model.IconClass" type="text" maxlength="50">
+                </div>               
+                <div class="form-group input-group">
+                    <span class="input-group-addon">Level</span>
+                    @Html.DropDownList("LevelType", new SelectList((IEnumerable<SelectListItem>)ViewBag.Level, "Value", "Text"), new { @class = "form-control", @id = "LevelType" })
+                </div>
+                <div class="form-group input-group">
+                    <span class="input-group-addon">Parent</span>
+                    @Html.DropDownList("ParentCode", new SelectList((IEnumerable<SelectListItem>)ViewBag.ParentScreen, "Value", "Text"), new { @class = "form-control", @id = "ParentCode" })
+                </div>
+                <div class="responseMessage"></div>
+
+            </div>
+            <div class="modal-footer">
+                <div class="box-footer">
+                    <div class="pull-right">
+                        @if (Model.Id == null)
+                        {
+                            <button class="btn btn-primary" onclick="UpdateScreen(this)">Add</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary" onclick="UpdateScreen(this)">Update</button>
+                        }
+                    </div>
+                    <div class="pull-left">
+                        <button type="reset" class="btn btn-default" onclick="$('#modal-AddScreen').modal('hide');">Close</button>
+                    </div>
+                </div>
+            </div>
+            @*}*@
+        </div>
+    </div>
+</div>
+<script>
+    var ScreenId = '@Model.Id';
+    var chk = true;
+    function DataValidation(btn) {
+        chk = true;
+        data = {};
+        object = [];
+        //var regExp = new RegExp("^-*[0-9,\.]+$");
+        data.Id = ScreenId;
+        data.Title = $('#Title').val();
+        data.URL = $('#URL').val();
+        data.Sequence = $('#Sequence').val();        
+        data.IconClass = $('#IconClass').val();    
+        data.ParentCode = $('#ParentCode').val();
+        data.LevelType = $('#LevelType').val();
+        object.push(data);
+        if (data.Title.length < 1 || data.Title.length > 500) {
+            $('#Title').addClass('error');
+            chk = false;
+        }
+        if (data.Sequence.length < 1 || data.Sequence.length > 5 || data.Sequence <= 0 ) {
+            $('#Sequence').addClass('error');
+            chk = false;
+        }
+        //if (data.URL.length < 1 || data.URL.length > 500) {
+        //    $('#URL').addClass('error');
+        //    chk = false;
+        //}
+        return object;
+    }
+
+    function UpdateScreen(btn) {
+        $(".error").removeClass("error");
+        data = {};
+        data.CatalogueList = DataValidation(btn);
+        if (chk == true) {
+            $.ajax({
+                async: true,
+                type: 'Post',
+                cache: false,
+                data: data,
+                crossDomain: true,
+                url: '_Screen',
+                success: function (data) {
+
+                    if (data.IsValid) {
+                        if (data.Id == null) {
+                            Helper.Methods.ShowPopUp('Success', 'Screen added successfully');
+                        }
+                        else {
+                            Helper.Methods.ShowPopUp('Success', 'Screen updated successfully');
+                        }
+                        $('#modal-AddScreen').modal('hide');
+                        setTimeout(function () {
+                            location.reload();
+                        }, 1000);
+                    }
+                    else {
+                        $('.responseMessage').text(data.Message);
+                        $('.responseMessage').addClass('red-text');
+                    }
+
+                }
+            });
+        }
+        else {
+            return;
+        }
+    }
+
+
+    $('#IconClass,#Title').on('keypress', function (event) {
+        var regex = new RegExp("^[a-zA-Z0-9\-\_ ]+$");
+        var key = String.fromCharCode(!event.charCode ? event.which : event.charCode);
+        if (!regex.test(key)) {
+            event.preventDefault();
+            return false;
+        }
+    });
+    $('#URL').on('keypress', function (event) {
+        var regex = new RegExp("^[a-zA-Z0-9\?\=\$\%\~\+\-\_\.\/ ]+$");
+        var key = String.fromCharCode(!event.charCode ? event.which : event.charCode);
+        if (!regex.test(key)) {
+            event.preventDefault();
+            return false;
+        }
+    });
+    $('#Sequence').on('keypress', function (event) {
+        var regex = new RegExp("^[0-9]+$");
+        var key = String.fromCharCode(!event.charCode ? event.which : event.charCode);
+        if (!regex.test(key)) {
+            event.preventDefault();
+            return false;
+        }
+    });
+
+
+</script>
+-----------
+
+Bundle
+
+using System.Web.Optimization;
+namespace Automobile.Admin.App_Start
+{
+    public class BundleConfig
+    {
+        public static void RegisterBundles(BundleCollection bundles)
+        {
+            BundleTable.EnableOptimizations = true;
+            bundles.Add(new StyleBundle("~/Assets/css/bundle").Include(
+               "~/Assets/bootstrap/css/bootstrap.css"
+               , "~/Assets/plugins/font-awesome/css/font-awesome.min.css"
+               , "~/Assets/plugins/ionicons/css/ionicons.min.css"
+               , "~/Assets/plugins/pace/pace.css"
+               , "~/Assets/css/AdminLTE.min.css"
+               , "~/Assets/plugins/select2/select2.min.css"
+               , "~/Assets/css/skins/_all-skins.min.css"               
+               , "~/Assets/plugins/datatables/dataTables.bootstrap.min.css"  
+             
+                      ));
+
+            bundles.Add(new ScriptBundle("~/Assets/Scripts").Include(
+                "~/Assets/plugins/jQuery/jquery.min.js"
+                , "~/Assets/bootstrap/js/bootstrap.min.js"
+                , "~/Assets/plugins/pace/pace.min.js"
+                , "~/Assets/js/app.min.js"
+                , "~/Assets/js/Helper.js"
+                , "~/Assets/plugins/select2/select2.full.min.js"
+                , "~/Assets/plugins/datatables/jquery.dataTables.min.js"
+                , "~/Assets/plugins/datatables/dataTables.bootstrap.min.js"
+                ,"~/Assets/js/knockout-3.1.0.js"
+                ,"~/Assets/js/knockout-3.1.0.debug.js"
+                      ));            
+        }
+    }
+}
+
+
+
+
+
+
